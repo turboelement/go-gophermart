@@ -16,13 +16,15 @@ import (
 type UserHandler struct {
 	svc    *service.UserService
 	key    string
+	secure bool
 	logger *zap.Logger
 }
 
-func NewUserHandler(svc *service.UserService, key string, logger *zap.Logger) *UserHandler {
+func NewUserHandler(svc *service.UserService, key string, secure bool, logger *zap.Logger) *UserHandler {
 	return &UserHandler{
 		svc:    svc,
 		key:    key,
+		secure: secure,
 		logger: logger,
 	}
 }
@@ -55,7 +57,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.SetAuthCookie(w, userID, h.key); err != nil {
+	if err := auth.SetAuthCookie(w, userID, h.key, h.secure); err != nil {
 		h.logger.Error("Failed to set auth cookie", zap.Error(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -87,7 +89,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.SetAuthCookie(w, userID, h.key); err != nil {
+	if err := auth.SetAuthCookie(w, userID, h.key, h.secure); err != nil {
 		h.logger.Error("Failed to set auth cookie", zap.Error(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return

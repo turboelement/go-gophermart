@@ -14,8 +14,9 @@ func AuthMiddleware(secretKey string, logger *zap.Logger) func(next http.Handler
 			userID, err := auth.GetUserIDFromCookie(r, secretKey)
 
 			if err != nil {
-				logger.Error("Error reading cookie", zap.Error(err))
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				logger.Debug("Authentication error", zap.Error(err))
+				ctx := auth.SetUserIDInContext(r.Context(), "")
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 

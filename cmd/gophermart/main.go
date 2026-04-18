@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"go-gophermart/internal/config"
 	"go-gophermart/internal/database"
@@ -35,7 +36,7 @@ func main() {
 
 	userRepo := repository.NewUserPostgresRepository(db.DB)
 	userService := service.NewUserService(userRepo)
-	userHandler := handler.NewUserHandler(userService, cfg.CookieSecret, zapLogger)
+	userHandler := handler.NewUserHandler(userService, cfg.CookieSecret, cfg.CookieSecure, zapLogger)
 
 	orderRepo := repository.NewOrderRepository(db.DB)
 	orderService := service.NewOrderService(orderRepo)
@@ -54,12 +55,15 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:    cfg.RunAddr,
-		Handler: router,
+		Addr:         cfg.RunAddr,
+		Handler:      router,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 
 	zapLogger.Info("Server running at",
 		zap.String("address", cfg.RunAddr),
+		zap.Bool("cookie_secure", cfg.CookieSecure),
 	)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		zapLogger.Fatal("Failed to start server", zap.Error(err))

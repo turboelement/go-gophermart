@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -15,6 +16,10 @@ const (
 	CookieMaxAge = time.Hour * 24 * 30 // 30 days
 )
 
+var (
+	ErrInvalidToken = errors.New("invalid token")
+)
+
 func GenerateUserID() (string, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
@@ -23,17 +28,11 @@ func GenerateUserID() (string, error) {
 	return id.String(), nil
 }
 
-type CustomClaims struct {
-	jwt.RegisteredClaims
-}
-
 func SignUserID(userID, secret string) (string, error) {
-	claims := CustomClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(CookieMaxAge)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
+	claims := jwt.RegisteredClaims{
+		Subject:   userID,
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(CookieMaxAge)),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -45,24 +44,28 @@ func SignUserID(userID, secret string) (string, error) {
 	return signedToken, nil
 }
 
-func VerifyUserID(tokenString, secret string) (string, bool) {
-	claims := &CustomClaims{}
+func VerifyUserID(tokenString, secret string) (string, error) {
+	claims := &jwt.RegisteredClaims{}
 
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(secret), nil
 	})
 
-	if err != nil || !token.Valid {
-		return "", false
+	if err != nil {
+		return "", fmt.Errorf("failed to parse token: %w", err)
 	}
 
-	return claims.Subject, true
+	if !token.Valid {
+		return "", ErrInvalidToken
+	}
+
+	return claims.Subject, nil
 }
 
-func SetAuthCookie(w http.ResponseWriter, userID, secret string) error {
+func SetAuthCookie(w http.ResponseWriter, userID, secret string, secure bool) error {
 	signedValue, err := SignUserID(userID, secret)
 	if err != nil {
 		return err
@@ -75,7 +78,7 @@ func SetAuthCookie(w http.ResponseWriter, userID, secret string) error {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   secure,
 	}
 
 	http.SetCookie(w, cookie)
@@ -91,9 +94,12 @@ func GetUserIDFromCookie(r *http.Request, secret string) (string, error) {
 		return "", fmt.Errorf("error reading cookie: %w", err)
 	}
 
-	userID, valid := VerifyUserID(cookie.Value, secret)
-	if !valid {
-		return "", nil
+	userID, err := VerifyUserID(cookie.Value, secret)
+	if err != nil {
+		if errors.Is(err, ErrInvalidToken) {
+			return "", nil
+		}
+		return "", fmt.Errorf("auth error: %w", err)
 	}
 
 	return userID, nil
@@ -119,7 +125,7 @@ func GetUserIDFromContext(ctx context.Context) (string, error) {
 	}
 
 	if userID == "" {
-		return "", fmt.Errorf("user ID in context is empty")
+		return "", fmt.Errorf("user not authenticated")
 	}
 
 	return userID, nil
