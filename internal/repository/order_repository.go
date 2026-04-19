@@ -96,3 +96,46 @@ func (repo *OrderPostgresRepository) GetOrdersByUserID(ctx context.Context, user
 
 	return orders, nil
 }
+
+func (repo *OrderPostgresRepository) GetOrdersForAccrual(ctx context.Context, count int) ([]models.Order, error) {
+	rows, err := repo.db.Query(ctx,
+		"SELECT id, number, user_id, status, accrual, uploaded_at FROM orders WHERE status IN ($1, $2) ORDER BY uploaded_at ASC LIMIT $3",
+		models.OrderStatusNew, models.OrderStatusProcessing, count,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error querying orders for accrual: %w", err)
+	}
+	defer rows.Close()
+
+	orders := []models.Order{}
+	for rows.Next() {
+		var order models.Order
+		if err := rows.Scan(&order.ID, &order.Number, &order.UserID, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return orders, nil
+}
+
+func (repo *OrderPostgresRepository) UpdateOrderByNumber(ctx context.Context, orderNumber string, status models.OrderStatus, accrual float64) error {
+	commandTag, err := repo.db.Exec(ctx,
+		"UPDATE orders SET status = $1, accrual = $2 WHERE number = $3",
+		status, accrual, orderNumber,
+	)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := commandTag.RowsAffected()
+	if rowsAffected == 0 {
+		return ErrOrderNotFound
+	}
+
+	return nil
+}

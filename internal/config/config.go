@@ -79,19 +79,19 @@ func New() (*Config, error) {
 	return cfg, nil
 }
 
-func shouldUseSecureCookie(runAddr string) bool {
-	if strings.HasPrefix(runAddr, "https://") {
+func shouldUseSecureCookie(url string) bool {
+	if strings.HasPrefix(url, "https://") {
 		return true
 	}
 
-	if strings.Contains(runAddr, ":443") {
+	if strings.Contains(url, ":443") {
 		return true
 	}
 
-	if !strings.Contains(runAddr, "localhost") &&
-		!strings.Contains(runAddr, "127.0.0.1") &&
-		!strings.Contains(runAddr, "0.0.0.0") &&
-		!strings.Contains(runAddr, "::1") {
+	if !strings.Contains(url, "localhost") &&
+		!strings.Contains(url, "127.0.0.1") &&
+		!strings.Contains(url, "0.0.0.0") &&
+		!strings.Contains(url, "::1") {
 		return true
 	}
 

@@ -11,6 +11,12 @@ type Order struct {
 	UploadedAt time.Time   `json:"uploaded_at"`
 }
 
+type AccrualOrder struct {
+	Order   string      `json:"order"`
+	Status  OrderStatus `json:"status"`
+	Accrual float64     `json:"accrual,omitempty"`
+}
+
 type OrderStatus string
 
 const (

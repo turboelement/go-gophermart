@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
 
+	"go-gophermart/internal/accrual"
 	"go-gophermart/internal/config"
 	"go-gophermart/internal/database"
 	"go-gophermart/internal/handler"
@@ -45,6 +47,22 @@ func main() {
 	balanceRepo := repository.NewBalanceRepository(db.DB)
 	balanceService := service.NewBalanceService(balanceRepo)
 	balanceHandler := handler.NewBalanceHandler(balanceService, zapLogger)
+
+	if cfg.AccrualSystemAddress != "" {
+		accrualClient := accrual.NewClient(cfg.AccrualSystemAddress)
+		accrualWorker := accrual.NewWorker(orderService, accrualClient, zapLogger)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		zapLogger.Info("Accrual running at",
+			zap.String("address", cfg.AccrualSystemAddress),
+		)
+		accrualWorker.Start(ctx)
+		defer accrualWorker.Stop()
+	} else {
+		zapLogger.Warn("Accrual system address not configured")
+	}
 
 	router := router.New(router.RouterDeps{
 		UserHandler:    userHandler,
